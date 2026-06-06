@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Conda / environment
+.conda/
+.env
+.env.*
+
+# Data
+data/raw/
+data/processed/
+
+# Generated outputs
+outputs/tables/
+outputs/figures/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
