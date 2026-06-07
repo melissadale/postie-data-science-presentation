@@ -11,7 +11,7 @@ The exploratory work focuses on understanding the dataset before answering the s
 | File | Description |
 |:---|:---|
 | [`exploratory_notes.md`](exploratory_notes.md) | Human-readable summary of the initial data observations |
-| [`notebooks/00_exploration_analysis.ipynb`](notebooks/00_exploration_analysis.ipynb) | Full exploratory notebook with code, outputs, and visualizations |
+| [`notebooks/00_exploration.ipynb`](notebooks/00_exploration.ipynb) | Full exploratory notebook with code, outputs, and visualizations |
 
 ## Requested Analysis
 
