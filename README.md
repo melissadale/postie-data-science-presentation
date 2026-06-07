@@ -10,8 +10,8 @@ The exploratory work focuses on understanding the dataset before answering the s
 
 | File | Description |
 |:---|:---|
-| [`reports/initial_data_impressions.md`](reports/initial_data_impressions.md) | Human-readable summary of the initial data observations |
-| [`notebooks/01_exploratory_analysis.ipynb`](notebooks/01_exploratory_analysis.ipynb) | Full exploratory notebook with code, outputs, and visualizations |
+| [`exploratory_notes.md`](exploratory_notes.md) | Human-readable summary of the initial data observations |
+| [`notebooks/00_exploratory_analysis.ipynb`](notebooks/00_exploratory_analysis.ipynb) | Full exploratory notebook with code, outputs, and visualizations |
 
 ## Requested Analysis
 
@@ -19,5 +19,5 @@ The requested analysis answers the challenge questions directly, using the clean
 
 | File | Description |
 |:---|:---|
-| [`reports/findings_summary.md`](reports/findings_summary.md) | Human-readable summary of the final answers and major findings |
-| [`notebooks/02_questions.ipynb`](notebooks/02_questions.ipynb) | Full notebook answering the challenge questions with supporting code and outputs |
+| [`postie_findings_summary.md`](postie_findings_summary.md) | Human-readable summary of the final answers and major findings |
+| [`notebooks/Analysis.ipynb`](notebooks/Analysis.ipynb) | Full notebook answering the challenge questions with supporting code and outputs |
