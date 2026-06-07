@@ -1,0 +1,4 @@
+date,transactions,total_sales,average_order_value,median_order_value,min_order_value,max_order_value,unique_customers,unique_websites,app_versions,source_files,sales_change_vs_prior_day,sales_pct_change_vs_prior_day,transaction_change_vs_prior_day,transaction_pct_change_vs_prior_day
+2017-07-01,9903,223515.0,22.57043320205998,6.0,0.0,55084.0,7372,2,1,1,,,,
+2017-07-02,11537,183752.0,15.927190777498483,6.0,3.0,55002.0,8168,2,1,2,-39763.0,-0.17789857503970652,1634.0,0.16500050489750584
+2017-07-03,11748,181583.0,15.456503234593121,6.0,-12.0,60000.0,8227,2,2,2,-2169.0,-0.011803953154251423,211.0,0.01828898327121431

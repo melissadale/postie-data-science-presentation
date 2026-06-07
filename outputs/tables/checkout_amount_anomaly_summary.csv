@@ -1,0 +1,10 @@
+metric,value
+total_rows,33188.0
+negative_checkout_amounts,17.0
+zero_checkout_amounts,4.0
+missing_checkout_amounts,0.0
+min_checkout_amount,-12.0
+max_checkout_amount,60000.0
+p01_checkout_amount,3.0
+p50_checkout_amount,6.0
+p99_checkout_amount,66.0
