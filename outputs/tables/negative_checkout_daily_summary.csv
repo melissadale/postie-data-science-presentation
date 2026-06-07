@@ -1,0 +1,4 @@
+date,negative_transaction_count,total_negative_checkout_value,min_negative_checkout_value,max_negative_checkout_value,unique_negative_values,affected_customers,affected_websites,affected_app_versions
+2017-07-01,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+2017-07-02,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+2017-07-03,17.0,-204.0,-12.0,-12.0,1.0,17.0,2.0,2.0

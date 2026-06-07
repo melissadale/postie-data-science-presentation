@@ -1,0 +1,21 @@
+website_id,product,single_product_transactions,min_observed_price,median_observed_price,max_observed_price,unique_observed_prices
+123,Bignay,1474,6.0,6.0,6.0,1
+123,Black/White Pepper,1462,5.0,5.0,5.0,1
+123,European Grape,1433,5.0,5.0,5.0,1
+123,Hazelnut,1392,4.0,4.0,4.0,1
+123,Mabolo,1448,8.0,8.0,8.0,1
+123,Natal Orange,1458,6.0,6.0,6.0,1
+123,Prairie Potato,1439,3.0,3.0,3.0,1
+123,Round Kumquat,1476,7.0,7.0,7.0,1
+123,Ume,1401,6.0,6.0,6.0,1
+123,Ylang-ylang,1414,5.0,5.0,5.0,1
+124,Bignay,1428,6.0,6.0,60000.0,2
+124,Black/White Pepper,1480,5.0,5.0,5.0,1
+124,European Grape,1418,5.0,5.0,5.0,1
+124,Hazelnut,1419,4.0,4.0,4.0,1
+124,Mabolo,1442,8.0,8.0,8.0,1
+124,Natal Orange,1511,6.0,6.0,6.0,1
+124,Prairie Potato,1424,3.0,3.0,3.0,1
+124,Round Kumquat,1452,7.0,7.0,7.0,1
+124,Ume,1391,6.0,6.0,6.0,1
+124,Ylang-ylang,1498,5.0,5.0,5.0,1
