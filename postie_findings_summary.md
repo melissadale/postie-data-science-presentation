@@ -1,341 +1,386 @@
-# Postie Data Challenge 
+# Postie Data Challenge — Analysis Notes
 
-This document summarizes the main findings from the analysis notebook without including the underlying code. The goal is to make the results easy to skim while preserving the key evidence, assumptions, and recommendations.
-
-The notebook remains the reproducible source of truth. This file is intended as a reader-facing summary of what I found and how I interpreted it.
+This document presents my responses to the challenge questions, with the main evidence and reasoning included alongside each answer.
 
 ---
 
-## Summary
+<div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
 
-The originally reported July 3 sales value of **$164,065** appears low because it matches a source-file or unnormalized date grouping rather than a UTC-normalized transaction-date grouping. After normalizing timestamps to UTC, July 3 sales are **$181,583**, which is only **$2,169 lower than July 2**.
+## Question 1: Why was the reported July 3 sales value lower than the previous day?
+</div>
 
-The data does not suggest a major collapse in transaction activity on July 3. In fact, transaction count is slightly higher on July 3 than July 2. The more important findings are around date handling, transaction anomalies, URL/cart parsing, and metric selection.
+<div style="background-color:#f7f7f7; padding:18px; border-left:6px solid #f28e2b; border-radius:6px;">
 
+### Answer
 
-| Finding | Why it matters |
-|:---|:---|
-| **Date-boundary handling changes the July 3 total** | The reported value matches unnormalized/source-file grouping, while UTC-normalized transaction dates produce a materially higher July 3 total. |
-| **July 3 has repeated `-12` checkout amounts** | These occur only on July 3 and appear across websites and app versions, making them worth investigating before final revenue reporting. |
-| **At least one malformed/error-like URL is tied to an extreme checkout amount** | URL-derived product and price analysis should include anomaly handling. |
-| **Product prices appear inferable for normal transactions** | Single-product carts show stable prices across websites, after excluding anomalous rows. |
-| **Average order value is not enough** | Checkout amounts are skewed by large transactions, so median, transaction count, outlier counts, and product/cart metrics should also be monitored. |
-| **July 4 forecast should be simple and cautious** | Only three days of data are available, and July 4 is a holiday, so complex modeling would create false precision. |
+The reported July 3 sales value appears low because it was calculated using the raw `2017-07-03.csv` source file rather than UTC-normalized transaction dates.
 
----
+The reported value of `$164,065.00` is reproducible: it matches the total sales value in the raw July 3 source file exactly. However, after normalizing timestamps to UTC and grouping transactions by transaction date, July 3 sales total `$181,583.00`.
 
-## Data Context
+Under the UTC-normalized calculation, July 3 is only `$2,169.00` lower than July 2, a decrease of about `1.2%`, while transaction count actually increases. This suggests the original report overstated the size of the drop because the daily grouping method was inconsistent with the timestamp normalization used in this analysis.
 
-The cleaned dataset contains transaction-level records from **July 1 through July 3, 2017**. Each record includes a timestamp, website ID, customer ID, app version, checkout amount, and a URL containing product/count parameters.
+</div>
 
-After cleaning, the analysis uses UTC-normalized timestamps so that transaction dates are compared consistently across files.
+### Date handling is the main issue
 
-| Metric | Value |
+The key finding is that there are two ways someone could reasonably group the data by day, and they do not produce the same total.
+
+| Definition | July 3 Sales | Difference from Reported |
+|:---|---:|---:|
+| Reported July 3 value | `$164,065` | `$0` |
+| Raw source-file grouping | `$164,065` | `$0` |
+| UTC-normalized transaction date | `$181,583` | `$17,518` |
+
+The reported value is not arbitrary. It matches the `2017-07-03.csv` file total. The discrepancy comes from date assignment: grouping by file name and grouping by normalized transaction date do not produce the same daily sales value.
+
+For the rest of the analysis, I use UTC-normalized transaction dates so daily comparisons share a consistent date boundary.
+
+### Negative checkout values are unusual, but not the main explanation
+
+July 3 also contains `17` negative checkout values. Each one is exactly `-$12.00`, for a total negative contribution of `-$204.00`.
+
+These transactions are worth flagging because they appear only on July 3 and occur across both website IDs and both app versions. However, they do not explain the `$17,518` difference between the reported source-file total and the UTC-normalized daily total.
+
+| Scenario | July 3 Sales |
 |:---|---:|
-| Rows | 33,188 |
-| Total sales | $588,850 |
-| Date range | 2017-07-01 to 2017-07-03 |
-| Missing timestamps after cleaning | 0 |
-| Missing checkout amounts after cleaning | 0 |
+| Keep `-12` values as valid negative revenue | `$181,583` |
+| Exclude `-12` values as errors | `$181,787` |
+| Treat `-12` values as sign errors | `$181,991` |
+
+### Takeaway
+
+The reported July 3 value appears lower than expected mainly because of date-boundary handling. The original number is reproducible, but it comes from grouping by the raw source file rather than by UTC-normalized transaction date.
+
+The repeated `-$12` transactions are also worth investigating, but they are too small to explain the difference between the reported value and the UTC-normalized total. I would treat them as a separate data-quality/context question rather than the main reason for the reported sales drop.
 
 ---
-
-<br><br>
-
 <div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
 
-## 1. Why was the reported July 3 sales value lower than the previous day?
+## Question 2: What other metrics should the analyst report? Is average sales value the right metric?
 </div>
-<br><br>
 
-The analyst reported July 3 sales of **$164,065**. When I compute July 3 sales using UTC-normalized transaction dates, I get **$181,583**.
+<div style="background-color:#f7f7f7; padding:18px; border-left:6px solid #f28e2b; border-radius:6px;">
 
-This means the reported value is lower than the UTC-normalized total by **$17,518**. The difference appears to come primarily from how transactions are assigned to dates.
+### Answer
 
-| Date | Total Sales | Transactions | Average Order Value | Median Order Value |
-|:---|---:|---:|---:|---:|
-| 2017-07-01 | $223,515 | 9,903 | $22.57 | $6.00 |
-| 2017-07-02 | $183,752 | 11,537 | $15.93 | $6.00 |
-| 2017-07-03 | $181,583 | 11,748 | $15.46 | $6.00 |
+Average order value is useful, but it should not be reported by itself.
 
-Using the normalized dates, July 3 is only **$2,169 lower than July 2**, or about **1.2%**. Transaction count is actually higher on July 3.
+In this data, the median checkout value is stable at `$6.00` across all three days, while average order value changes more noticeably. That tells me the average is being influenced by the upper tail of the checkout distribution rather than reflecting a major shift in the typical transaction.
 
-### Supporting figure
+For a daily sales report, I would include total sales, transaction count, average order value, median order value, high-value transaction counts, negative/unusual checkout counts, and website/app-version breakdowns.
 
-<p align="center">
-  <img src="outputs/figures/daily_total_sales.png" alt="Daily Total Sales" width="55%">
-</p>
-
-### Note on negative checkout amounts
-
-July 3 also contains **17 negative checkout amounts**, each exactly **`-12`**, for a total contribution of **-$204**.
-
-These negative transactions do not explain the full reported discrepancy, but they are suspicious because they occur only on July 3 and have the same repeated value. They should be investigated before final revenue reporting.
-
-### Note on one malformed URL / large transaction
-
-There is also at least one transaction with a malformed or error-like URL associated with a very large checkout amount. I do **not** remove this transaction from the July 3 sales total in this analysis.
-
-My current assumption is that the checkout amount may still represent a valid transaction, even if the URL did not serialize cleanly. It is also possible that the unusually large order itself contributed to the malformed URL behavior. Because I do not have enough evidence to treat the transaction as invalid, I leave it in the sales total and flag it as something to revisit.
-
-This matters because removing or reclassifying a very large transaction would materially change daily sales. For now, I treat it as a valid transaction with a data-quality concern attached, rather than as a transaction that should be excluded automatically.
-
-### Interpretation
-
-July 3 sales are slightly lower than July 2, but not nearly as low as the originally reported value suggests. The evidence points more toward **date-boundary handling and transaction-level anomalies** than a major drop in customer activity.
-
----
-<br><br>
-
-<div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
-
-## 2. Is average sales value the right metric?
 </div>
-<br><br>
-Average sales value is useful, but it should not be used alone.
 
-The checkout amount distribution is skewed, with a small number of very large transactions. This means the average can move substantially even when the typical checkout remains stable. In this dataset, the median checkout amount is **$6.00 on all three days**, while the average order value varies more noticeably.
+### Daily sales need more than one metric
 
-### Recommended metrics
+The daily metrics tell a more complete story when viewed together.
 
-| Metric | Why it is useful |
+| Date | Transactions | Total Sales | Avg Order Value | Median Order Value | Min Order | Max Order |
+|:---|---:|---:|---:|---:|---:|---:|
+| 2017-07-01 | 9,903 | `$223,515` | `$22.57` | `$6.00` | `$0` | `$55,084` |
+| 2017-07-02 | 11,537 | `$183,752` | `$15.93` | `$6.00` | `$3` | `$55,002` |
+| 2017-07-03 | 11,748 | `$181,583` | `$15.46` | `$6.00` | `-$12` | `$60,000` |
+
+The median stays flat, but the average moves. That is a strong sign that average order value is being affected by unusually large transactions.
+
+
+#### Daily Total Sales
+
+<img src="outputs/figures/daily_total_sales.png" alt="Daily Total Sales" width="60%">
+
+#### Daily Transaction Count
+
+<img src="outputs/figures/daily_transaction_count.png" alt="Daily Transaction Count" width="60%">
+
+#### Daily Average Checkout Value
+
+<img src="outputs/figures/daily_average_order_value.png" alt="Daily Average Checkout Value" width="60%">
+
+#### Daily Median Checkout Value
+
+<img src="outputs/figures/daily_median_order_value.png" alt="Daily Median Checkout Value" width="60%">
+
+
+### Metrics I would report
+
+| Metric | Why I would report it |
 |:---|:---|
-| **Total sales** | Measures overall revenue. |
-| **Transaction count** | Shows customer/order activity independent of order size. |
-| **Average order value** | Useful for revenue per transaction, but sensitive to outliers. |
-| **Median order value** | Better reflects a typical transaction when the distribution is skewed. |
-| **High-value transaction count** | Helps explain large changes in daily sales or average order value. |
-| **Negative transaction count/value** | Flags refunds, adjustments, discounts, or possible logging/pricing issues. |
-| **Website-level breakdowns** | Helps identify whether behavior is isolated to one website. |
-| **App-version breakdowns** | Useful because July 3 includes an app version transition. |
-| **Cart size and product mix** | Helps explain whether sales changes are driven by what customers bought. |
+| **Total sales** | Shows total revenue for the day. |
+| **Transaction count** | Shows whether revenue changed because of purchase volume. |
+| **Average order value** | Useful revenue-per-transaction metric, but sensitive to large transactions. |
+| **Median order value** | Better representation of a typical checkout when the distribution is skewed. |
+| **Min/max checkout value** | Quickly surfaces unusual negative or very large transactions. |
+| **High-value transaction count and contribution** | Shows whether daily totals are being driven by a few unusually large checkouts. |
+| **Negative checkout count and contribution** | Flags possible refunds, corrections, promotions, or logging issues. |
+| **Website breakdown** | Helps determine whether a pattern is system-wide or isolated to one website. |
+| **App-version breakdown** | Helps determine whether behavior changes around the app update. |
 
+### Takeaway
 
-
-### Checkout Amount Distribution
-
-<img src="outputs/figures/boxplots.png" alt="Distribution of Checkout Amounts" width="55%">
+Average order value should be included, but it should not be the primary metric by itself. A better daily report would pair average order value with total sales, transaction count, median order value, and anomaly checks.
 
 ---
 
-### Daily Total Sales
-
-<img src="outputs/figures/daily_total_sales.png" alt="Daily Total Sales" width="55%">
-
----
-
-
-### Daily Transaction Count
-
-<img src="outputs/figures/daily_transaction_count.png" alt="Daily Transaction Count" width="55%">
-
----
-
-### Daily Average Order Value
-
-<img src="outputs/figures/daily_average_order_value.png" alt="Daily Average Order Value" width="55%">
-
----
-
-### Daily Median Order Value
-
-<img src="outputs/figures/daily_median_order_value.png" alt="Daily Median Order Value" width="55%">
-
-### Interpretation
-
-Average order value is not wrong, but it is not stable enough to use as the primary health metric by itself. It should be reported alongside total sales, transaction count, median order value, outlier counts, anomaly counts, and website/app-version breakdowns.
-
----
-
-<br><br>
 <div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
 
-## 3. What information can be extracted from the URLs? Can product prices be inferred?
+## Question 3: What information can be extracted from the URLs? Can product prices be inferred?
 </div>
-<br><br>
 
-The URLs are one of the most useful fields in the dataset. The query strings encode cart contents as product/count pairs, which allows each transaction to be decomposed into products and quantities.
+<div style="background-color:#f7f7f7; padding:18px; border-left:6px solid #f28e2b; border-radius:6px;">
 
-From the URLs, I can extract:
+### Answer
 
-- product names,
-- product quantities,
-- number of distinct products in the cart,
-- total item quantity,
-- product combinations,
-- website/domain and checkout path patterns,
-- malformed or unusual URL/query behavior.
+The URLs are useful because the query strings appear to encode the contents of each cart. From them, I can extract product names, quantities, cart size, product combinations, website/domain patterns, and malformed or unusual checkout behavior.
 
-### Important caveat: malformed URL behavior
+Product prices can be inferred for normal cart rows, especially from single-product transactions where the unit price is directly observable. These inferred prices appear stable across the normal transactions and consistent across both websites.
 
-Not every URL should be treated as a reliable cart. At least one malformed/error-like URL is associated with an extreme checkout amount. This matters because product-price inference assumes that the URL accurately represents the cart.
+However, I would not infer prices blindly from every URL. At least one row parses as an `error` product and is associated with the extreme `$60,000.00` checkout amount. That row is useful as an anomaly flag, but I would not treat it as reliable product-price evidence.
 
-Rows with malformed URLs, negative checkout amounts, or extreme checkout values should be flagged before using URL-derived prices as authoritative.
+</div>
 
-### Inferred product prices
+### What the URLs contain
 
-For normal single-product transactions, product prices can be inferred directly by dividing checkout amount by quantity. These prices appear consistent across both websites.
+The URLs are not just page locations. The query strings appear to represent the cart contents.
+
+Example patterns:
+
+| URL pattern | Interpreted cart information |
+|:---|:---|
+| `...?Bignay=1` | 1 Bignay |
+| `...?Ume=1&Natal+Orange=1` | 1 Ume + 1 Natal Orange |
+| `...?Round+Kumquat=1&European+Grape=1` | 1 Round Kumquat + 1 European Grape |
+
+This makes the URL field important because it provides transaction-level cart detail that is not available from `checkout_amount` alone.
+
+### Product-price inference
+
+Single-product carts are the cleanest starting point for price inference because the checkout amount can be divided directly by the item quantity:
+
+`checkout_amount = quantity × unit_price`
+
+For multi-product carts, the checkout amount is a combined total:
+
+`checkout_amount = quantity_1 × price_1 + quantity_2 × price_2 + ...`
+
+Because there are many normal single-product carts, the product prices can be checked directly before trying to reason about more complicated carts. Based on those clean rows, the inferred product prices appear stable and consistent across the two websites.
 
 | Product | Inferred Unit Price |
 |:---|---:|
-| Bignay | $6 |
-| Black/White Pepper | $5 |
-| European Grape | $5 |
-| Hazelnut | $4 |
-| Mabolo | $8 |
-| Natal Orange | $6 |
-| Prairie Potato | $3 |
-| Round Kumquat | $7 |
-| Ume | $6 |
-| Ylang-ylang | $5 |
+| Prairie Potato | `$3` |
+| Hazelnut | `$4` |
+| Black/White Pepper | `$5` |
+| European Grape | `$5` |
+| Ylang-ylang | `$5` |
+| Bignay | `$6` |
+| Natal Orange | `$6` |
+| Ume | `$6` |
+| Round Kumquat | `$7` |
+| Mabolo | `$8` |
 
-The main exception is a Bignay transaction on website `124` with an observed unit price of **$60,000**. Because the median Bignay price is still **$6**, and because that row appears tied to malformed/error-like URL behavior, I would treat it as an anomaly rather than a true product price.
+### Important anomaly: malformed URL behavior
 
-### Interpretation
+One transaction contains an error-like URL token and is associated with the largest checkout amount in the dataset:
 
-Product prices can be inferred for normal product rows. However, not every URL should be trusted without validation. URL parsing is valuable, but it should be paired with anomaly checks.
+| Timestamp | Website | App Version | Checkout Amount | Parsed Product | URL |
+|:---|---:|---:|---:|:---|:---|
+| 2017-07-03 07:59:32 UTC | 124 | 1.2 | `$60,000` | `error` | `http://xyz.com/checkout?Bignay=1&error=True` |
 
----
+This matters because product price inference depends on the assumption that the URL accurately represents the cart. A row containing an error token should not be used as normal evidence for product pricing or typical checkout behavior.
 
-<br><br>
+### Other useful URL-derived fields
+
+Beyond price inference, the parsed URLs are useful because they add structure to the transaction data. They make it possible to look at what was purchased, how many items were included, and whether certain cart patterns or malformed rows stand out.
+
+| URL-derived field | Why it is useful |
+|:---|:---|
+| **Domain / website path** | Helps separate behavior across the two website implementations. |
+| **Product names** | Allows product mix to be compared across dates, websites, and app versions. |
+| **Product quantities** | Allows cart size and item-count behavior to be analyzed. |
+| **Distinct products per cart** | Helps distinguish simple single-product purchases from larger multi-product carts. |
+| **Malformed or error-like URL tokens** | Helps identify transactions that should be excluded from normal product-price inference. |
+| **Product combinations** | Helps identify common bundles or cart patterns that may affect checkout value. |
+
+### Takeaway
+
+The URLs are one of the most useful fields in the dataset. They turn the transaction records into cart-level data, which makes product-price inference, cart-size analysis, product-mix analysis, and anomaly detection possible.
+
+The main caution is that the URLs still need to be validated before being treated as reliable cart data. Normal product/count rows can be used for price inference, but malformed rows, error-like URL tokens, negative checkout values, and extreme checkout amounts should be handled separately.
+
 <div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
 
-## 4. What purchasing combinations, events, or metrics are worth reporting?
+## Question 4: Are there interesting purchasing combinations, events, or metrics worth reporting?
 </div>
-<br><br>
 
-The most important findings are not only purchasing combinations. They are a mix of purchasing behavior, system behavior, and data-quality signals.
+<div style="background-color:#f7f7f7; padding:18px; border-left:6px solid #f28e2b; border-radius:6px;">
 
-### System events and data behaviors worth reporting
+### Answer
+
+Yes. The most useful things to report are a mix of purchasing behavior and data/system context.
+
+The URL-derived cart fields make it possible to look at what customers are buying, how large their carts are, and whether certain products or product combinations stand out. From this view, most carts appear to be relatively simple, normal product prices appear stable, and the product mix is fairly balanced across the available dates.
+
+That said, the purchasing patterns are only part of the story. Some of the most important findings come from how the data is recorded: timestamp/date-boundary handling, repeated `-$12` checkout amounts, the malformed URL tied to the `$60,000.00` checkout value, and the app version transition. These details affect how much confidence I would place in the raw sales totals and how I would explain changes over time.
+
+</div>
+
+### Purchasing behavior worth displaying
+
+The URL-derived cart fields are helpful because they let us move beyond daily sales totals. Instead of only asking whether sales went up or down, we can also look at what people bought, how many items were in their carts, and whether certain products or combinations show up more often than others.
+
+These are the purchasing views I would include:
+
+| Area | What I would show | Why it matters |
+|:---|:---|:---|
+| **Cart size** | Distinct products per cart and total item quantity | Helps show whether purchases are mostly simple carts or larger/more complex orders. |
+| **Common product combinations** | Most common multi-product carts | Gives a sense of normal bundle/cart behavior and helps explain larger checkout amounts. |
+| **Product mix** | Daily product share and product-mix deviation | Shows whether changes in sales may be related to what customers are buying. |
+| **Website/app-version breakdowns** | Sales and unusual values by website ID and app version | Helps separate general purchasing behavior from website- or app-specific patterns. |
+
+### Product mix context
+
+From the URLs, we can gain insight into which products are being purchased online.
+
+The bar chart below shows product purchases across the days. Overall, each product appears to be purchased at a roughly similar rate. In other words, there does not appear to be one product that is overwhelmingly popular or one product that is clearly underperforming.
+
+<img src="outputs/figures/product_mix_by_day.png" alt="Product mix by day bar chart" width="75%">
+
+Because the product mix appears fairly balanced overall, we can use the heatmaps to check whether any products stand out more clearly on a day-to-day basis.
+
+<div style="display: flex; gap: 16px; align-items: flex-start;">
+
+<img src="outputs/figures/heatmap_share.png" alt="Product mix share heatmap" width="48%">
+
+<img src="outputs/figures/daily_product_mix_heatmap.png" alt="Product mix deviation from even share heatmap" width="48%">
+
+</div>
+
+Together, these views help describe the general purchasing mix and make it easier to spot whether any products stand out across dates.
+
+
+### Data and system context
+
+Beyond the purchasing patterns, there are a few data/system details that change how I would interpret the results. These are not necessarily “bad data” issues, but they are places where the raw numbers can be misleading if they are treated too casually.
 
 | Finding | Why it matters |
 |:---|:---|
-| **Date-boundary/source-file mismatch** | Explains why the reported July 3 value differs from the UTC-normalized total. |
-| **Repeated `-12` checkout amounts** | Occur only on July 3 and may indicate a systematic adjustment, pricing issue, promotion, or logging artifact. |
-| **Malformed/error-like URL tied to an extreme checkout amount** | Suggests that product and price inference need anomaly handling. |
-| **App version transition on July 3** | July 3 includes both app version `1.1` and `1.2`, so version behavior should be considered when diagnosing that day. |
-| **Skewed checkout distribution** | A small number of large transactions can materially affect sales totals and averages. |
+| **Date-boundary/source-file mismatch** | The originally reported July 3 value is reproducible, but it comes from source-file grouping. When timestamps are normalized to UTC and grouped by transaction date, the July 3 total is higher. This means daily sales comparisons depend on having a consistent date definition. |
+| **Repeated `-$12` checkout amounts** | These transactions only appear on July 3, and they show up across both websites and both app versions. They may be valid adjustments, refunds, or promotions, but the repeated exact value makes them worth isolating before final revenue reporting. |
+| **Malformed/error-like URL tied to `$60,000.00` checkout** | The `$60,000.00` transaction is especially important because the URL contains an error-like token. I would not use this row as normal evidence for product pricing or typical checkout behavior. |
+| **App version transition on July 3** | July 3 includes both app version `1.1` and `1.2`. That does not prove the app update caused a problem, but it is useful context when checking whether unusual behavior lines up with the version change. |
+| **Skewed checkout distribution** | A small number of very large transactions can noticeably affect total sales and average order value. This is why I compare averages with medians and inspect large checkout values directly. |
 
-### Product mix
+### Takeaway
 
-The product mix appears fairly balanced across days. There are small shifts in individual products, but no single product appears to dominate July 3 in a way that would clearly explain the lower sales total.
+The main thing I would be careful about is treating the daily sales totals as simple, clean numbers without checking how they were created.
 
-<p align="center">
-  <img src="outputs/figures/product_mix_by_day.png" alt="Product Mix by Day" width="60%">
-</p>
+Some of the most important findings come from the “boring” parts of the data: timestamp handling, source files, URL parsing, app versions, and unusual checkout values. These details do not necessarily mean the data is wrong, but they do affect how confidently I would explain changes in sales or use the data for forecasting.
 
-<p align="center">
-  <img src="outputs/figures/daily_product_mix_heatmap.png" alt="Product Mix by Day" width="40%">
-</p>
+For this reason, I would report the purchasing patterns alongside the data/system context. The product mix and cart behavior help explain what customers appear to be buying, while the timestamp, URL, and checkout anomalies help explain how much trust to place in the raw totals.
 
-This suggests July 3’s sales pattern is more likely related to date handling, order-value distribution, anomalies, or system behavior than to a major shift in what products customers purchased.
+---
+<div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
 
-### Cart size
+## Question 5: Can total sales for 2017-07-04 be predicted? How certain is the prediction?
+</div>
 
-Most transactions appear to be simple carts, often containing a single product. This supports the reliability of single-product price inference.
+<div style="background-color:#f7f7f7; padding:18px; border-left:6px solid #f28e2b; border-radius:6px;">
 
-Larger multi-product or high-quantity carts are less common, but they can contribute disproportionately to revenue and average order value. These should be monitored separately from typical carts.
+### Answer
 
-### Interpretation
+I predict July 4 total sales will be approximately **$182,500**, with an uncertainty range of roughly **$165,000 to $205,000**.
 
-For reporting, I would include daily sales and transaction metrics, but also add anomaly counts, cart-size distribution, product mix, high-value transaction monitoring, website/app-version breakdowns, and URL parsing validation.
+This is a low-confidence forecast. The estimate is based on simple baselines rather than a complex model because only three days of transaction data are available. The point estimate comes from the middle of several baseline calculations, including a prior-day forecast, a recent two-day average, a transaction-count/AOV forecast, and a small adjustment scenario for the repeated `-$12` checkout values.
+
+The July 4 holiday adds extra uncertainty. Sales could plausibly be higher if customers are buying food-related products for gatherings, BBQs, or holiday events. Sales could also plausibly be lower if customers are busy with festivities, shopping in physical stores, or behaving differently from a normal weekday.
+
+</div>
+
+### Simple forecast baselines
+
+These are not complicated estimation attempts. With only three days of data, a complicated model would likely give a false sense of confidence.
+
+Instead, I used a few simple baselines to anchor the forecast near recently observed sales levels. Each method makes a slightly different assumption about what July 4 might look like.
+
+| Method | Forecasted July 4 Sales | What it assumes |
+|:---|---:|:---|
+| Prior-day forecast | `$181,583` | July 4 looks like July 3. |
+| Recent 2-day average | `$182,668` | July 4 looks like the average of July 2 and July 3. |
+| Transaction count × recent AOV | `$182,684` | July 4 has similar transaction count and average order value as the recent period. |
+| July 3 adjusted if `-12` values were sign errors | `$181,991` | July 3 would be slightly higher if repeated negative values were sign errors. |
+
+
+### Why I used the middle of the baselines
+
+The point forecast is the median of the simple baseline estimates. I used the median because each baseline captures a slightly different assumption, and I did not want one method to dominate the forecast.
+
+The candidate estimates are all in the same general range, so I use approximately `$182,500` as the point forecast. I would not treat the exact dollar amount as precise.
+
+### Why July 4 adds uncertainty
+
+The forecast date is July 4, which may not behave like a normal day. The available data does not include prior holidays or enough surrounding dates to estimate a holiday effect directly.
+
+There are plausible arguments in both directions. Since the products appear to be food-related, July 4 could increase purchasing if customers are preparing for gatherings, BBQs, or family events. On the other hand, online sales could decrease if customers are busy with holiday plans, away from work/computers, or more likely to make last-minute purchases in physical stores.
+
+Because I cannot estimate that holiday effect from the available data, I do not apply a specific July 4 adjustment. Instead, I keep the point estimate close to the recent observed sales level and use a wider uncertainty range.
+
+### Takeaway
+
+The most defensible forecast here is a simple baseline estimate, not a highly tuned model.
+
+I would use approximately **$182,500** as the July 4 point forecast, with a working range of **$165,000 to $205,000**. The point estimate is anchored to the recent normalized daily sales totals, but the range is intentionally wide because the dataset is short, July 4 may affect purchasing behavior, and the data includes transaction-level anomalies that should be interpreted carefully.
 
 ---
 
-<br><br>
 <div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
 
-## 5. July 4 Sales Prediction
+## Question 6: What additional information, data, or access would improve the prediction?
 </div>
-<br><br>
 
-I predict July 4 total sales will be approximately **$182,500**.
+<div style="background-color:#f7f7f7; padding:18px; border-left:6px solid #f28e2b; border-radius:6px;">
 
-I would treat this as a **low-confidence forecast**, with a reasonable uncertainty range of roughly:
+### Answer
 
-```text
-$165,000 to $205,000
-```
+Yes. The forecast would be substantially better with more historical transaction data, especially comparable weekdays and prior holiday periods. With only three days of data, I cannot reliably estimate normal day-to-day variation, holiday effects, seasonality, or whether July 4 should be adjusted upward or downward.
 
-This is intentionally not a model-heavy forecast. With only three days of available data, a complex model would likely create a false sense of precision.
+I would also want clearer reporting rules and system context: the correct timezone/date-boundary definition, product catalog/pricing data, promotion/refund information, and app release or error logs. These would help determine whether unusual values are real business behavior or data/system artifacts.
 
-### Forecasting approach
+Without that additional context, the July 4 prediction should remain a simple, low-confidence baseline rather than a more complex forecast.
 
-The prediction estimates total checkout sales for **2017-07-04**, using cleaned and UTC-normalized transaction data from July 1 through July 3.
-
-The baselines considered are:
-
-| Method | Interpretation |
-|:---|:---|
-| **Prior-day forecast** | July 4 looks like July 3. |
-| **Recent 2-day average** | July 4 looks like the average of July 2 and July 3. |
-| **Transaction-based forecast** | Estimate transactions and multiply by recent average order value. |
-| **Negative-value adjustment scenario** | Consider whether July 3’s repeated `-12` transactions should be adjusted. |
-
-### Assumptions
-
-This forecast assumes:
-
-- UTC-normalized transaction date is the correct date definition.
-- July 4 behavior is broadly similar to July 2 and July 3.
-- No major system outage occurs on July 4.
-- No major app-version effect occurs on July 4.
-- The repeated `-12` transactions on July 3 are not large enough to materially change the forecast.
-- Large outlier purchases may occur, but cannot be predicted reliably from the available history.
-- July 4 being a U.S. holiday is an important uncertainty factor, but the available dataset does not provide enough history to estimate a holiday effect directly.
-
-### Interpretation
-
-The available data supports a prediction that July 4 will likely be in the same general range as July 2 and July 3. However, the exact value is uncertain because the dataset is short, July 4 may behave differently as a holiday, and the transaction data contains outliers and anomalies.
-
----
-
-<br><br>
-<div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
-
-## 6. What additional data would improve the prediction?
 </div>
-<br><br>
 
-Yes. The forecast would be substantially better with more historical sales data, clearer date/reporting rules, product metadata, promotion/refund information, and system/app release context.
+### Most useful additional data
 
-| Additional data or access | Why it would help |
+| Additional data or access | Why it would improve the prediction |
 |:---|:---|
-| **More historical transaction data** | Needed to estimate normal daily variation, weekday patterns, holiday effects, and seasonality. |
-| **Prior July 4 / holiday sales history** | July 4 may not behave like a normal day, but the current dataset cannot estimate that effect. |
-| **Confirmed timezone and reporting rules** | Daily totals depend on how transaction dates are defined. |
-| **Product catalog and authoritative prices** | Would confirm inferred product prices and identify malformed cart behavior. |
-| **Discounts, coupons, refunds, taxes, and shipping fields** | Would clarify whether checkout amount should equal product quantity times price. |
-| **App release/deployment logs** | July 3 includes an app version transition, so release timing and known issues would help diagnose behavior. |
-| **Error/logging data** | Would help explain malformed/error-like URLs and extreme checkout values. |
-| **Customer/session/order identifiers** | Would help detect duplicate orders, retries, abandoned/replayed checkouts, or repeated customer behavior. |
-| **Inventory or product availability data** | Would help determine whether product mix or sales volume changed due to stockouts or availability. |
+| **More historical transaction data** | Needed to estimate normal day-to-day variation, weekday patterns, holiday effects, and seasonality. |
+| **Prior July 4 / holiday sales history** | Would help estimate whether July 4 tends to increase or decrease online sales for these products. |
+| **Confirmed timezone and reporting rules** | Daily totals depend on how transaction dates are defined, so the reporting timezone should be explicit. |
+| **Product catalog and authoritative prices** | Would validate inferred product prices and help separate normal purchases from malformed URL behavior. |
+| **Promotion, discount, refund, tax, and shipping fields** | Would clarify why checkout amount may differ from product quantity times price. |
+| **App release and deployment logs** | July 3 includes an app version transition, so release timing and known issues could explain changes in behavior. |
+| **Application error/logging data** | Would help explain malformed/error-like URL rows and determine whether extreme checkout values are valid. |
+| **Order/session identifiers** | Would help detect duplicate orders, retries, replayed checkouts, abandoned sessions, or repeated customer behavior. |
+| **Inventory or product availability data** | Would help determine whether product mix or sales volume changed due to stockouts or availability issues. |
 
-### Interpretation
+### Why this matters
 
 The largest limitation is the short time window. With only July 1 through July 3 available, it is not possible to reliably estimate trends, seasonality, weekday effects, or holiday behavior.
 
-With more history and system context, I could move from a simple baseline forecast to a more reliable model that accounts for seasonality, holidays, product mix, app-version changes, and transaction anomalies.
+The second limitation is context. The analysis uncovered several values that could be valid business behavior or could be system/data issues. More data would not only improve the forecast; it would also make it clearer which observed patterns reflect customer behavior and which reflect reporting definitions, system behavior, or transaction anomalies.
 
 ---
-<br><br>
-
 <div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
 
-## Final Takeaways
+## Final Note
+
 </div>
-<br><br>
-The core issue is not that July 3 had a dramatic drop in customer activity. The larger story is that the data requires careful interpretation.
 
-The most important findings are:
+The strongest finding is not that July 3 had a large sales drop. After normalizing timestamps, July 3 sales are close to July 2 sales. The bigger lesson is that daily sales reporting needs consistent date handling and should be paired with transaction-level checks.
 
-1. **The reported July 3 value matches unnormalized/source-file grouping, not UTC-normalized transaction-date grouping.**
-2. **July 3 sales are slightly lower than July 2, but only modestly lower after normalization.**
-3. **Transaction count increases on July 3, so the lower total is not driven by fewer transactions.**
-4. **Repeated `-12` checkout amounts occur only on July 3 and should be investigated.**
-5. **At least one malformed/error-like URL is tied to an extreme checkout amount.**
-6. **Product prices appear consistent for normal transactions, but malformed rows need to be flagged.**
-7. **Product mix appears stable, so July 3 is not obviously explained by a major shift toward cheaper products.**
-8. **A simple, transparent July 4 forecast is more defensible than a complex model with only three days of data.**
+For this dataset, I would be especially careful with:
 
-Overall, I would report July 4 expected sales at approximately **$182,500**, with a wide uncertainty range of **$165,000 to $205,000**, and I would prioritize additional historical data and system context before building a more formal predictive model.
+- timezone/date-boundary definitions,
+- repeated `-$12` checkout values,
+- the `$60,000.00` checkout tied to `error=True`,
+- the July 3 app-version transition,
+- and the skewed checkout amount distribution.

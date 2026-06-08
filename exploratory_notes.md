@@ -1,171 +1,138 @@
-# Initial Data Impressions
+# Exploratory Data Analysis Summary
 
-This document summarizes preliminary observations from the exploratory notebook. These notes are not intended to answer the challenge questions directly. Instead, they capture what I noticed while validating and exploring the dataset before moving into explanation, URL analysis, and forecasting.
-
-The goal of this stage was to understand the structure and behavior of the data, identify potential data quality concerns, and determine which areas require deeper investigation.
-
-## Scope of This Markdown File
-
-After acquiring the raw transaction logs, several items stood out as potentially important for deeper analysis:
-
-- Timestamps include timezone information and need to be normalized before comparing daily totals.
-- July 3 has lower total sales than the prior available days, despite having more transactions than July 2.
-- A small number of very large transactions exist, which may skew daily averages and total sales comparisons.
-- July 3 includes an app version change, with records from both version 1.1 and version 1.2.
-- A number of negative checkout amounts appear, and these occur only on July 3.
+This markdown file summarizes the main patterns and data-quality questions from the exploratory notebook. It is not intended to answer the full challenge questions directly. Instead, it highlights what stood out during the initial data review and points to the tables and figures that support those observations.
 
 Generated charts are saved in `outputs/figures/`, and generated summary tables are saved in `outputs/tables/`.
 
 ---
 
-## 1. Data Loading and Timestamp Normalization
+<div style="background-color:#f3faf5; padding:16px; border-left:6px solid #8fbf9f; border-radius:6px;">
 
-The transaction logs were loaded from the public S3 bucket described in the challenge instructions. Each file contains transaction-level records with timestamps, website IDs, customer IDs, app versions, checkout amounts, and URLs.
+## Summary of Initial Exploration
+</div>
 
-During initial loading, the timestamp field contained timezone-aware values with mixed timezone information. To make records comparable across files and dates, I normalized all timestamps to Coordinated Universal Time (UTC).
+This initial exploration helped identify a few patterns and data-quality questions that are useful context for the requested analysis:
 
-This matters because the challenge involves daily sales totals. If transactions are grouped into days without a consistent timezone convention, records near date boundaries could be assigned to different days depending on the parsing or reporting method used.
+- **Timestamps do not appear to be normalized.** When reporting daily summaries, it is important that all transactions share a common timezone baseline.
 
-**Initial takeaway:** timezone handling should be explicit. Inconsistent timestamp normalization could lead to misaligned daily comparisons.
+- Daily sales, average checkout values, median checkout values, and transaction counts seem **reasonably consistent** across the available dates.
+
+- When looking at daily sales by website ID, there is an interesting pattern where **website 123 decreases in sales while website 124 increases in sales**. With only three days of data, it is difficult to know whether this is meaningful. However, it may be worth noting, especially if either website 123 or website 124 had any changes that could affect sales.
+
+- **There are odd negative values.** These values are all exactly `-$12.00`. They only appear on July 3, but they appear across both websites and both app versions. They also do not immediately seem tied to a specific item from the URL. This makes a bug tied only to the app upgrade, a specific website, or a specific item seem less likely.
+
+- **There are very large checkout amount outliers.** When inspecting the 10 largest checkout amounts, there is a noticeable jump from hundreds of dollars (`$573.00`) to over eight thousand dollars (`$8,219.00`). The largest checkout amount is notably `$60,000.00`. This data point is worth flagging because there are a few possible indicators that it may be problematic: the amount is exactly `$60,000.00`, the URL contains `error=True`, and it appears to be the first major outlier after the app version was updated. These observations do not prove that there is an issue with the transaction, but they do suggest that it should be handled with care.
 
 ---
 
-## 2. General Overview
+## Supporting Notes and Outputs
 
-Initial daily summaries show that July 3 has lower total sales than the prior available days, even though it has slightly more transactions than July 2. The average order value is also lower on July 3, while the median order value is the same across all three days. This suggests the difference in daily sales may be influenced by skew, outliers, product mix, or unusual transaction behavior rather than a simple decrease in transaction volume.
+### 1. Timestamp normalization matters
 
-Data summary:
+The raw timestamps contain timezone information, so daily comparisons should use a consistent timezone convention. In the exploratory notebook, timestamps were normalized to UTC before creating date-level summaries.
 
-| Date | Transactions | Total Sales | Avg Order Value | Median Order Value | Min Order | Max Order | Unique Customers | App Versions |
+This matters because the requested analysis relies on daily sales totals. If transactions near a date boundary are grouped using inconsistent timezone assumptions, the daily totals could shift slightly.
+
+---
+
+### 2. Daily sales and transaction patterns are mostly consistent
+
+The daily summary provides a quick baseline for comparing the available dates.
+
+| Date | Transactions | Total Sales | Avg Checkout Value | Median Checkout Value | Min Checkout | Max Checkout | Unique Customers | App Versions |
 |:---|---:|---:|---:|---:|---:|---:|---:|---:|
 | 2017-07-01 | 9,903 | $223,515 | $22.57 | $6.00 | $0 | $55,084 | 7,372 | 1 |
 | 2017-07-02 | 11,537 | $183,752 | $15.93 | $6.00 | $3 | $55,002 | 8,168 | 1 |
 | 2017-07-03 | 11,748 | $181,583 | $15.46 | $6.00 | -$12 | $60,000 | 8,227 | 2 |
 
-### Daily Total Sales
+The median checkout value is stable across all three days, while the average checkout value varies more. This suggests that the checkout amount distribution is skewed and that large transactions may have a noticeable effect on daily totals.
 
-<img src="outputs/figures/daily_total_sales.png" alt="Daily Total Sales" width="55%">
+**Relevant table:** `outputs/tables/daily_summary.csv`
+
+#### Daily Total Sales
+
+<img src="outputs/figures/daily_total_sales.png" alt="Daily Total Sales" width="60%">
+
+#### Daily Transaction Count
+
+<img src="outputs/figures/daily_transaction_count.png" alt="Daily Transaction Count" width="60%">
+
+#### Daily Average Checkout Value
+
+<img src="outputs/figures/daily_average_order_value.png" alt="Daily Average Checkout Value" width="60%">
+
+#### Daily Median Checkout Value
+
+<img src="outputs/figures/daily_median_order_value.png" alt="Daily Median Checkout Value" width="60%">
 
 ---
 
-### Daily Total Sales by Website
+### 3. Website-level sales show a pattern worth noting
+
+Splitting daily sales by website ID shows that the two websites do not move in the same direction. Website `123` decreases in sales, while website `124` increases in sales.
+
+With only three days of data, I would not treat this as a clear trend. However, it is useful context. If either website had deployment, marketing, routing, product, pricing, or tracking changes during this period, that could help explain the difference.
+
+#### Daily Total Sales by Website
 
 <img src="outputs/figures/daily_web.png" alt="Daily Total Sales by Website" width="75%">
 
 ---
 
-### Daily Transaction Count
+### 4. Hourly patterns add context, but do not fully explain the issue by themselves
 
-<img src="outputs/figures/daily_transaction_count.png" alt="Daily Transaction Count" width="55%">
+Hourly sales and transaction volume are useful checks because they can show whether a daily change is spread throughout the day or concentrated around a specific time window.
 
----
+In this exploration, hourly views are treated as context rather than a final explanation. The data spans only a few days, so I am cautious about reading too much into hour-by-hour differences without additional dates for comparison.
 
-### Daily Average Order Value
+**Relevant table:** `outputs/tables/hourly_daily_summary.csv`
 
-<img src="outputs/figures/daily_average_order_value.png" alt="Daily Average Order Value" width="55%">
+#### Hourly Sales by Date
 
----
+<img src="outputs/figures/hourly_sales_by_date.png" alt="Hourly Sales by Date" width="75%">
 
-### Daily Median Order Value
+#### Hourly Transaction Volume by Date
 
-<img src="outputs/figures/daily_median_order_value.png" alt="Daily Median Order Value" width="55%">
-
-**Initial takeaway:** daily total sales should not be interpreted by itself. It needs to be paired with transaction volume, order-value metrics, and checks for unusual transactions or system-level changes.
+<img src="outputs/figures/hourly_transactions_by_date.png" alt="Hourly Transaction Volume by Date" width="75%">
 
 ---
 
-## 3. Sales Patterns Include Skew and Hourly Variation 
+### 5. Negative checkout values should be isolated before deciding how to treat them
 
-The checkout amount field contains a small number of very large transactions. These outliers matter because they can strongly affect daily total sales and average order value, especially when comparing only a few days of data.
+There are 17 negative checkout values in the data, and all of them are exactly `-$12.00`. They only appear on July 3, but they appear across both website IDs and both app versions.
 
-This is one reason I avoid relying only on daily totals or average order value. The median order value is stable across all three days, while the average varies more noticeably, suggesting that the distribution of checkout amounts is skewed.
+This makes the pattern unusual. It does not immediately look like a simple issue tied to only one website, only one app version, or one obvious URL item. These could still be valid transactions, such as refunds, returns, reversals, corrections, discounts, or another business process. However, because the value is repeated exactly, I would avoid silently including or excluding them without additional context.
 
-To avoid letting a few extreme values dominate the visual analysis, I inspect transaction amount distributions separately from the aggregate daily sales views.
+**Relevant table:** `outputs/tables/negative_checkout_transactions.csv`
 
-### Hourly Sales by Day
+| timestamp | date | hour | website_id | customer_id | app_version | checkout_amount | url | source_file |
+|:---|:---|---:|---:|---:|---:|---:|:---|:---|
+| 2017-07-03 00:27:19+00:00 | 2017-07-03 | 0 | 124 | 10678 | 1.1 | -12 | `http://xyz.com/checkout?European+Grape=1&Round+Kumquat=1` | 2017-07-03.csv |
+| 2017-07-03 08:20:25+00:00 | 2017-07-03 | 8 | 124 | 10113 | 1.1 | -12 | `http://xyz.com/checkout?Bignay=2` | 2017-07-03.csv |
+| 2017-07-03 10:01:08+00:00 | 2017-07-03 | 10 | 123 | 10769 | 1.1 | -12 | `http://www.example.com/store/?Round+Kumquat=1&European+Grape=1` | 2017-07-03.csv |
+| 2017-07-03 11:15:33+00:00 | 2017-07-03 | 11 | 124 | 10906 | 1.2 | -12 | `http://xyz.com/checkout?Round+Kumquat=1&Black%2FWhite+Pepper=1` | 2017-07-03.csv |
+| 2017-07-03 04:37:32+00:00 | 2017-07-03 | 4 | 123 | 10814 | 1.2 | -12 | `http://store.example.com/?Round+Kumquat=1&European+Grape=1` | 2017-07-03.csv |
+| 2017-07-03 12:33:22+00:00 | 2017-07-03 | 12 | 124 | 10921 | 1.2 | -12 | `http://xyz.com/checkout?Bignay=2` | 2017-07-03.csv |
+| 2017-07-03 14:57:28+00:00 | 2017-07-03 | 14 | 123 | 10177 | 1.2 | -12 | `http://store.example.com/?Round+Kumquat=1&Black%2FWhite+Pepper=1` | 2017-07-03.csv |
 
-<img src="outputs/figures/hourly_sales_by_date.png" alt="Hourly Sales by Day" width="55%">
-
----
-
-### Checkout Amount Distribution
-
-<img src="outputs/figures/boxplots.png" alt="Distribution of Checkout Amounts" width="55%">
-
-**Initial takeaway:** daily total sales should not be interpreted by itself. A small number of very large transactions may meaningfully affect total sales and average order value, so median order value and transaction-level distributions are important context.
-
----
-
-## 4. App Version Change on July 3
-
-The exploratory analysis also reviews behavior by app version. This is noteworthy because July 3 is the only day in the available data with records from both app version `1.1` and app version `1.2`.
-
-At this stage, I am not assuming the app version change caused any difference in sales behavior. However, because the version change occurs on the same day that total sales appear lower, it is useful context to carry forward. Comparing transaction volume, checkout amounts, and hourly activity by app version may help determine whether the July 3 patterns are consistent across versions or differ between them.
-
-### Hourly Transactions by Date and App Version
-
-<img src="outputs/figures/hourly_transactions_by_date_app_version.png" alt="Hourly Transactions by Date and App Version" width="55%">
-
-**Initial takeaway:** July 3 includes an app version transition, which may be relevant context for later analysis. This does not imply the update caused a problem, but app-version-level behavior should be considered when interpreting July 3 sales patterns.
+The table above shows a shortened sample. The full set of negative transactions is saved in the output table.
 
 ---
 
-## 5. Negative Checkout Amounts Appear Only on July 3
+### 6. Large checkout outliers may strongly affect totals and averages
 
-One notable transaction-level anomaly is that negative checkout amounts appear only on July 3. Every negative checkout amount observed is exactly `-12`.
+The checkout amount distribution includes a small number of very large transactions. This matters because daily total sales and average checkout value can be heavily influenced by a few extreme values, especially with only three days of data.
 
-This pattern is worth investigating because:
+The largest checkout amount is `$60,000.00`. I would flag this transaction for review because the value is exactly `$60,000.00`, the URL contains `error=True`, and it appears after the app version update. That does not prove the transaction is invalid, but it does make the record worth treating carefully.
 
-- the negative values appear only on July 3,
-- the amount is always exactly `-12`,
-- the records occur across both website IDs and persist across the app version transition, appearing in both `1.1` and `1.2`, and the consistency of the amount makes ordinary returns or refunds less obvious as the sole explanation.
+**Relevant tables:**
 
-A negative checkout amount could represent a refund, return, chargeback, coupon, adjustment, or correction. However, the repeated `-12` value suggests the possibility of a more systematic explanation, such as a product price entered incorrectly, a discount or promotion being logged as a transaction, or another application/data logging behavior.
+- `outputs/tables/checkout_amount_anomaly_summary.csv`
+- `outputs/tables/top_10_largest_checkout_values.csv`
 
-At this stage, I am not removing these transactions from the data. Instead, I am flagging them as records that require additional context before deciding whether they should be included in sales totals, excluded, or reclassified.
+#### Checkout Amount Distribution
 
-Relevant output table of negative checkout amounts:
-
-| timestamp                 | date       |   hour |   website_id |   customer_id |   app_version |   checkout_amount | url                                                              | source_file    |
-|:--------------------------|:-----------|-------:|-------------:|--------------:|--------------:|------------------:|:-----------------------------------------------------------------|:---------------|
-| 2017-07-03 00:27:19+00:00 | 2017-07-03 |      0 |          124 |         10678 |           1.1 |               -12 | http://xyz.com/checkout?European+Grape=1&Round+Kumquat=1         | 2017-07-03.csv |
-| 2017-07-03 08:20:25+00:00 | 2017-07-03 |      8 |          124 |         10113 |           1.1 |               -12 | http://xyz.com/checkout?Bignay=2                                 | 2017-07-03.csv |
-| 2017-07-03 01:28:04+00:00 | 2017-07-03 |      1 |          124 |         10186 |           1.1 |               -12 | http://xyz.com/checkout?Ume=1&Natal+Orange=1                     | 2017-07-03.csv |
-| 2017-07-03 10:01:08+00:00 | 2017-07-03 |     10 |          123 |         10769 |           1.1 |               -12 | http://www.example.com/store/?Round+Kumquat=1&European+Grape=1   | 2017-07-03.csv |
-| 2017-07-03 03:10:05+00:00 | 2017-07-03 |      3 |          124 |         10152 |           1.1 |               -12 | http://xyz.com/checkout?Round+Kumquat=1&Black%2FWhite+Pepper=1   | 2017-07-03.csv |
-| 2017-07-03 11:15:33+00:00 | 2017-07-03 |     11 |          124 |         10906 |           1.2 |               -12 | http://xyz.com/checkout?Round+Kumquat=1&Black%2FWhite+Pepper=1   | 2017-07-03.csv |
-| 2017-07-03 11:18:54+00:00 | 2017-07-03 |     11 |          124 |         10187 |           1.2 |               -12 | http://xyz.com/checkout?Round+Kumquat=1&Ylang-ylang=1            | 2017-07-03.csv |
-| 2017-07-03 04:37:32+00:00 | 2017-07-03 |      4 |          123 |         10814 |           1.2 |               -12 | http://store.example.com/?Round+Kumquat=1&European+Grape=1       | 2017-07-03.csv |
-| 2017-07-03 11:44:53+00:00 | 2017-07-03 |     11 |          124 |         10098 |           1.2 |               -12 | http://xyz.com/checkout?Natal+Orange=2                           | 2017-07-03.csv |
-| 2017-07-03 05:10:47+00:00 | 2017-07-03 |      5 |          123 |         10462 |           1.2 |               -12 | http://store.example.com/?Hazelnut=1&Mabolo=1                    | 2017-07-03.csv |
-| 2017-07-03 05:21:34+00:00 | 2017-07-03 |      5 |          123 |         10586 |           1.2 |               -12 | http://store.example.com/?Round+Kumquat=1&European+Grape=1       | 2017-07-03.csv |
-| 2017-07-03 12:33:22+00:00 | 2017-07-03 |     12 |          124 |         10921 |           1.2 |               -12 | http://xyz.com/checkout?Bignay=2                                 | 2017-07-03.csv |
-| 2017-07-03 05:36:29+00:00 | 2017-07-03 |      5 |          124 |         10064 |           1.2 |               -12 | http://xyz.com/checkout?Bignay=2                                 | 2017-07-03.csv |
-| 2017-07-03 05:41:52+00:00 | 2017-07-03 |      5 |          123 |         10885 |           1.2 |               -12 | http://store.example.com/?Round+Kumquat=1&Ylang-ylang=1          | 2017-07-03.csv |
-| 2017-07-03 06:30:39+00:00 | 2017-07-03 |      6 |          124 |         10580 |           1.2 |               -12 | http://xyz.com/checkout?Round+Kumquat=1&Black%2FWhite+Pepper=1   | 2017-07-03.csv |
-| 2017-07-03 07:49:50+00:00 | 2017-07-03 |      7 |          124 |         10998 |           1.2 |               -12 | http://xyz.com/checkout?European+Grape=1&Round+Kumquat=1         | 2017-07-03.csv |
-| 2017-07-03 14:57:28+00:00 | 2017-07-03 |     14 |          123 |         10177 |           1.2 |               -12 | http://store.example.com/?Round+Kumquat=1&Black%2FWhite+Pepper=1 | 2017-07-03.csv |
-
-**Initial takeaway:** The repeated `-12` transactions are unlikely to be random noise. They should be isolated before deciding whether they represent valid promotional adjustments, returns/corrections, a pricing/catalog issue, or a logging artifact.
+<img src="outputs/figures/boxplots.png" alt="Distribution of Checkout Amounts by Date" width="65%">
 
 ---
 
-## 6. Initial Items to Carry Forward
-
-This document is intended only as a record of the patterns and anomalies that stood out during preliminary data exploration. I have not yet attempted to answer the challenge questions directly.
-
-The items that seem most worth remembering are:
-
-- **The negative checkout amounts are unusual.**  
-  They occur only on July 3, are always exactly `-12`, and appear across website IDs and app versions.
-
-- **July 3 includes an app version change.**  
-  App version `1.2` first appears on July 3, making the version transition useful context for later interpretation.
-
-- **The checkout amount distribution is skewed.**  
-  A few very large transactions may materially affect daily totals and average order value.
-
-- **Timezone handling matters.**  
-  Daily comparisons should use a consistent timestamp normalization/date-boundary convention.
-
----
