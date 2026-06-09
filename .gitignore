@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# ------------------------------------------------------------
+# Project-specific files
+# ------------------------------------------------------------
+
+# Interview/challenge data
+data/
+*.csv
+*.xlsx
+*.xls
+*.json
+*.parquet
+*.pkl
+*.pickle
+
+# Local editor settings
+.vscode/
