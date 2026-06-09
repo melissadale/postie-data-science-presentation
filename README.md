@@ -4,6 +4,9 @@ This repository contains my analysis for the Postie data challenge.
 
 I approached the project in two parts. First, I explored the raw transaction data to understand the structure, patterns, and potential data-quality concerns. Then, I used those findings to answer the requested challenge questions.
 
+A quick note on format: the notebooks are intentionally more detailed than the written summary. I used the notebooks as my working analysis space, so they include exploratory checks, intermediate outputs, and a few paths I investigated to understand the data more fully. The markdown files are the cleaner review materials: they summarize the main findings, reasoning, and evidence without requiring the reader to work through every exploratory step.
+
+
 ## Exploratory Analysis
 
 The exploratory analysis focuses on understanding the dataset before moving into the requested questions. I used this stage to check how the data was structured, whether fields needed to be normalized, and whether any values stood out as unusual or potentially important for interpretation.
@@ -17,8 +20,8 @@ Some of the main checks included:
 
 | File | Description |
 |:---|:---|
-| [`exploratory_notes.md`](exploratory_notes.md) | Readable notes on the initial data observations and data-quality questions |
-| [`notebooks/00_exploration.ipynb`](notebooks/00_exploration.ipynb) | Full exploratory notebook with code, outputs, and visualizations |
+| [`exploratory_notes.md`](exploratory_notes.md) | Clean readable notes on the initial data observations and data-quality questions |
+| [`notebooks/00_exploration.ipynb`](notebooks/00_exploration.ipynb) | Full exploratory notebook with code, intermediate checks, outputs, and visualizations |
 
 ## Requested Analysis
 
@@ -35,5 +38,5 @@ The analysis addresses:
 
 | File | Description |
 |:---|:---|
-| [`postie_findings_summary.md`](postie_findings_summary.md) | Written responses to the challenge questions, with the main evidence and reasoning included alongside each answer |
-| [`notebooks/Analysis.ipynb`](notebooks/Analysis.ipynb) | Full analysis notebook answering the challenge questions with supporting code and outputs |
+| [`postie_findings_summary.md`](postie_findings_summary.md) | Clean written summary of the challenge-question responses, including the main evidence, reasoning, and conclusions |
+| [`notebooks/Analysis.ipynb`](notebooks/Analysis.ipynb) | Full working analysis notebook with supporting code, intermediate checks, outputs, and visualizations |

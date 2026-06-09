@@ -134,7 +134,7 @@ The URLs are useful because the query strings appear to encode the contents of e
 
 Product prices can be inferred for normal cart rows, especially from single-product transactions where the unit price is directly observable. These inferred prices appear stable across the normal transactions and consistent across both websites.
 
-However, I would not infer prices blindly from every URL. At least one row parses as an `error` product and is associated with the extreme `$60,000.00` checkout amount. That row is useful as an anomaly flag, but I would not treat it as reliable product-price evidence.
+However, I would not infer prices blindly from every URL. At least one row contains an `error=True` URL token and is associated with the extreme `$60,000.00` checkout amount. That row is useful as an anomaly flag, and it may reflect a real high-quantity order, but I would not treat the recorded URL as reliable product-price evidence without system confirmation.
 
 </div>
 
@@ -187,6 +187,24 @@ One transaction contains an error-like URL token and is associated with the larg
 
 This matters because product price inference depends on the assumption that the URL accurately represents the cart. A row containing an error token should not be used as normal evidence for product pricing or typical checkout behavior.
 
+
+### Possible explanation for the `$60,000` error row
+
+The `$60,000.00` transaction is especially worth investigating because the URL appears to contain two conflicting signals.
+
+On one hand, the URL includes `Bignay=1`, which would normally suggest a cart containing one Bignay. Based on the inferred product prices, one Bignay appears to cost `$6.00`, so a normal `Bignay=1` checkout would be expected to total `$6.00`, not `$60,000.00`.
+
+On the other hand, `$60,000.00` is exactly consistent with `10,000` Bignay units at `$6.00` each:
+
+`10,000 × $6.00 = $60,000.00`
+
+This makes one plausible explanation that the underlying checkout/order may have contained `10,000` Bignay units, but the URL was malformed or truncated when recorded. For example, if the URL generation or logging code did not handle a five-digit quantity correctly, the recorded query string may have ended up showing `Bignay=1&error=True` instead of the full intended quantity.
+
+Another possibility is that the malformed URL behavior is related to the app-version transition. The transaction occurred on July 3, when both app versions `1.1` and `1.2` appear in the data. That does not prove the update caused the issue, but it makes the row worth checking against deployment logs, application error logs, and any known changes to checkout URL generation or cart serialization.
+
+I would not remove this row automatically, because the `$60,000.00` checkout amount may represent a real high-quantity order. However, I would also not use the URL from this row as normal evidence for product-price inference. I would flag it for investigation and confirm whether the checkout amount, item quantity, and recorded URL are all consistent in the source system.
+
+
 ### Other useful URL-derived fields
 
 Beyond price inference, the parsed URLs are useful because they add structure to the transaction data. They make it possible to look at what was purchased, how many items were included, and whether certain cart patterns or malformed rows stand out.
@@ -197,7 +215,7 @@ Beyond price inference, the parsed URLs are useful because they add structure to
 | **Product names** | Allows product mix to be compared across dates, websites, and app versions. |
 | **Product quantities** | Allows cart size and item-count behavior to be analyzed. |
 | **Distinct products per cart** | Helps distinguish simple single-product purchases from larger multi-product carts. |
-| **Malformed or error-like URL tokens** | Helps identify transactions that should be excluded from normal product-price inference. |
+| **Malformed/error-like URL tied to `$60,000.00` checkout** | The URL shows `Bignay=1&error=True`, but the checkout amount is exactly consistent with 10,000 Bignay units at the inferred `$6.00` unit price. This could reflect a real high-quantity order with malformed URL logging, a URL-generation issue with large quantities, or an app-version-related system issue. |
 | **Product combinations** | Helps identify common bundles or cart patterns that may affect checkout value. |
 
 ### Takeaway
@@ -215,36 +233,56 @@ The main caution is that the URLs still need to be validated before being treate
 
 ### Answer
 
-Yes. The most useful things to report are a mix of purchasing behavior and data/system context.
+Yes. The URL-derived cart data reveals several purchasing and system-level patterns that are worth reporting beyond daily sales totals.
 
-The URL-derived cart fields make it possible to look at what customers are buying, how large their carts are, and whether certain products or product combinations stand out. From this view, most carts appear to be relatively simple, normal product prices appear stable, and the product mix is fairly balanced across the available dates.
+The most notable purchasing-combination finding is not a simple two-product pair. The most common multi-product cart contains **all 10 products**, appears **161 times across all three days**, and has a median checkout value of **$140**. However, its average checkout value is much higher because some carts contain very large quantities. This pattern should be monitored as either meaningful full-catalog purchasing behavior or a possible generated/test/system pattern.
 
-That said, the purchasing patterns are only part of the story. Some of the most important findings come from how the data is recorded: timestamp/date-boundary handling, repeated `-$12` checkout amounts, the malformed URL tied to the `$60,000.00` checkout value, and the app version transition. These details affect how much confidence I would place in the raw sales totals and how I would explain changes over time.
+I also checked pairwise product co-occurrence. The pairwise table and heatmap show that many product pairs occur together at fairly similar rates, so the pairwise view is not especially diagnostic on its own. Because the repeated all-products cart contributes to many pair counts simultaneously, I would interpret pairwise co-occurrence alongside the full-cart combination table rather than treating it as strong evidence of specific product affinity.
+
+The analyst should also monitor cart size, checkout amount distribution, high-value transactions, negative checkout amounts, malformed or error-like URLs, website ID, app version, and date-boundary/source-file handling. These system-level details affect how sales totals should be interpreted.
 
 </div>
 
 ### Purchasing behavior worth displaying
 
-The URL-derived cart fields are helpful because they let us move beyond daily sales totals. Instead of only asking whether sales went up or down, we can also look at what people bought, how many items were in their carts, and whether certain products or combinations show up more often than others.
+The URL-derived cart fields are useful because they move the analysis beyond daily sales totals. Instead of only asking whether sales went up or down, we can also look at what customers bought, how many products were in their carts, and whether certain cart structures appear repeatedly.
 
 These are the purchasing views I would include:
 
 | Area | What I would show | Why it matters |
 |:---|:---|:---|
 | **Cart size** | Distinct products per cart and total item quantity | Helps show whether purchases are mostly simple carts or larger/more complex orders. |
-| **Common product combinations** | Most common multi-product carts | Gives a sense of normal bundle/cart behavior and helps explain larger checkout amounts. |
+| **Product combinations** | Most common full-cart combinations, product-pair counts, and co-occurrence heatmap | Shows repeated all-product carts, bundle-like behavior, and whether pairwise relationships are actually informative. |
 | **Product mix** | Daily product share and product-mix deviation | Shows whether changes in sales may be related to what customers are buying. |
 | **Website/app-version breakdowns** | Sales and unusual values by website ID and app version | Helps separate general purchasing behavior from website- or app-specific patterns. |
 
+### Most notable combination finding: repeated all-products carts
+
+The most important combination finding is the repeated full-catalog cart. The most common multi-product cart contains all 10 products:
+
+`Bignay + Black/White Pepper + European Grape + Hazelnut + Mabolo + Natal Orange + Prairie Potato + Round Kumquat + Ume + Ylang-ylang`
+
+This cart appears **161 times** and is observed across all three days. Its median checkout value is **$140**, but the average checkout value is much higher because some transactions contain very large quantities.
+
+This is worth reporting because it does not behave like a typical product-pair affinity pattern. It may represent a real full-catalog purchase behavior, but it could also reflect a generated/test cart pattern or another system-level behavior. Either way, it is exactly the kind of pattern that would be hidden if the analyst only reviewed daily sales totals.
+
+### Pairwise product co-occurrence
+
+I also checked pairwise product co-occurrence to see whether a smaller set of two-product relationships stood out.
+
+The pairwise table is useful as a reporting layer because two-product combinations are easy to monitor over time. However, in this dataset, the pairwise view is not the strongest finding. Many product pairs occur together at fairly similar rates, and the repeated all-products cart increases many pair counts at the same time.
+
+For that reason, I would not over-interpret the co-occurrence heatmap as evidence of strong product affinity. Instead, I would treat it as a diagnostic check that supports the larger conclusion: the most interesting combination pattern is at the full-cart level, not the two-product-pair level.
+
 ### Product mix context
 
-From the URLs, we can gain insight into which products are being purchased online.
+From the URLs, we can also examine which products are being purchased online.
 
-The bar chart below shows product purchases across the days. Overall, each product appears to be purchased at a roughly similar rate. In other words, there does not appear to be one product that is overwhelmingly popular or one product that is clearly underperforming.
+The product mix appears fairly balanced across the available days. There are small shifts in individual products, but no single product dominates the product mix in a way that clearly explains the major sales-reporting differences.
 
 <img src="outputs/figures/product_mix_by_day.png" alt="Product mix by day bar chart" width="75%">
 
-Because the product mix appears fairly balanced overall, we can use the heatmaps to check whether any products stand out more clearly on a day-to-day basis.
+Because the product mix is fairly balanced overall, the more important purchasing finding is not that one product suddenly became dominant. The stronger finding is the repeated all-products cart pattern and the way larger carts affect checkout-value interpretation.
 
 <div style="display: flex; gap: 16px; align-items: flex-start;">
 
@@ -256,26 +294,27 @@ Because the product mix appears fairly balanced overall, we can use the heatmaps
 
 Together, these views help describe the general purchasing mix and make it easier to spot whether any products stand out across dates.
 
-
 ### Data and system context
 
-Beyond the purchasing patterns, there are a few data/system details that change how I would interpret the results. These are not necessarily “bad data” issues, but they are places where the raw numbers can be misleading if they are treated too casually.
+Beyond the purchasing patterns, there are several data/system details that change how I would interpret the results. These are not necessarily “bad data” issues, but they are places where the raw numbers can be misleading if they are treated too casually.
 
 | Finding | Why it matters |
 |:---|:---|
-| **Date-boundary/source-file mismatch** | The originally reported July 3 value is reproducible, but it comes from source-file grouping. When timestamps are normalized to UTC and grouped by transaction date, the July 3 total is higher. This means daily sales comparisons depend on having a consistent date definition. |
+| **Date-boundary/source-file mismatch** | The originally reported July 3 value is reproducible, but it comes from source-file grouping. When timestamps are normalized to UTC and grouped by transaction date, the July 3 total is higher. Daily sales comparisons depend on having a consistent date definition. |
 | **Repeated `-$12` checkout amounts** | These transactions only appear on July 3, and they show up across both websites and both app versions. They may be valid adjustments, refunds, or promotions, but the repeated exact value makes them worth isolating before final revenue reporting. |
-| **Malformed/error-like URL tied to `$60,000.00` checkout** | The `$60,000.00` transaction is especially important because the URL contains an error-like token. I would not use this row as normal evidence for product pricing or typical checkout behavior. |
+| **Malformed/error-like URL tied to `$60,000.00` checkout** | The URL shows `Bignay=1&error=True`, but the checkout amount is exactly consistent with 10,000 Bignay units at the inferred `$6.00` unit price. This could reflect a real high-quantity order with malformed URL logging, a URL-generation issue with large quantities, or an app-version-related system issue. |
 | **App version transition on July 3** | July 3 includes both app version `1.1` and `1.2`. That does not prove the app update caused a problem, but it is useful context when checking whether unusual behavior lines up with the version change. |
 | **Skewed checkout distribution** | A small number of very large transactions can noticeably affect total sales and average order value. This is why I compare averages with medians and inspect large checkout values directly. |
 
 ### Takeaway
 
-The main thing I would be careful about is treating the daily sales totals as simple, clean numbers without checking how they were created.
+The key finding from Question 4 is that the dataset should not be monitored only through daily sales totals. The URL-derived cart data reveals cart-level and system-level patterns that would otherwise be hidden.
 
-Some of the most important findings come from the “boring” parts of the data: timestamp handling, source files, URL parsing, app versions, and unusual checkout values. These details do not necessarily mean the data is wrong, but they do affect how confidently I would explain changes in sales or use the data for forecasting.
+The most important purchasing-combination finding is the repeated all-products cart. This is more informative than the pairwise co-occurrence heatmap, which shows broadly similar product-pair counts rather than a few standout pairings. In this case, the heatmap is useful mostly as a diagnostic check: it confirms that the strongest combination signal is at the full-cart level, not the two-product-pair level.
 
-For this reason, I would report the purchasing patterns alongside the data/system context. The product mix and cart behavior help explain what customers appear to be buying, while the timestamp, URL, and checkout anomalies help explain how much trust to place in the raw totals.
+For ongoing reporting, I would track cart-size distribution, common full-cart combinations, product-pair counts, product mix, median checkout amount by cart size, high-value transactions, negative checkout amounts, malformed URLs, website ID, app version, and date-boundary/source-file handling.
+
+Overall, URL parsing should be treated as a reporting layer, not just a cleaning step. It turns the data from daily sales totals into cart-level data that can support purchasing analysis, anomaly detection, and system monitoring.
 
 ---
 <div style="background-color:#fff3cd; padding:16px; border-left:6px solid #f0ad4e; border-radius:6px;">
@@ -287,7 +326,7 @@ For this reason, I would report the purchasing patterns alongside the data/syste
 
 ### Answer
 
-I predict July 4 total sales will be approximately **$182,500**, with an uncertainty range of roughly **$165,000 to $205,000**.
+I predict July 4 total sales will be approximately **$182,500**, with an uncertainty range of roughly **$181,500 to $183,000**.
 
 This is a low-confidence forecast. The estimate is based on simple baselines rather than a complex model because only three days of transaction data are available. The point estimate comes from the middle of several baseline calculations, including a prior-day forecast, a recent two-day average, a transaction-count/AOV forecast, and a small adjustment scenario for the repeated `-$12` checkout values.
 
@@ -321,13 +360,13 @@ The forecast date is July 4, which may not behave like a normal day. The availab
 
 There are plausible arguments in both directions. Since the products appear to be food-related, July 4 could increase purchasing if customers are preparing for gatherings, BBQs, or family events. On the other hand, online sales could decrease if customers are busy with holiday plans, away from work/computers, or more likely to make last-minute purchases in physical stores.
 
-Because I cannot estimate that holiday effect from the available data, I do not apply a specific July 4 adjustment. Instead, I keep the point estimate close to the recent observed sales level and use a wider uncertainty range.
+Because I cannot estimate that holiday effect from the available data, I do not apply a specific July 4 adjustment. Instead, I keep the point estimate close to the recent observed sales level and treat the scenario-based range as a baseline range, not a full statistical confidence interval.
 
 ### Takeaway
 
 The most defensible forecast here is a simple baseline estimate, not a highly tuned model.
 
-I would use approximately **$182,500** as the July 4 point forecast, with a working range of **$165,000 to $205,000**. The point estimate is anchored to the recent normalized daily sales totals, but the range is intentionally wide because the dataset is short, July 4 may affect purchasing behavior, and the data includes transaction-level anomalies that should be interpreted carefully.
+I would use approximately **$182,500** as the July 4 point forecast, with a scenario-based baseline range of approximately **$181,500 to $183,000**. The baseline estimates cluster tightly, which suggests the simple methods agree with each other. However, this should not be mistaken for high confidence. The dataset is short, July 4 may affect purchasing behavior, and the data includes transaction-level anomalies that should be interpreted carefully.
 
 ---
 
@@ -381,6 +420,7 @@ For this dataset, I would be especially careful with:
 
 - timezone/date-boundary definitions,
 - repeated `-$12` checkout values,
-- the `$60,000.00` checkout tied to `error=True`,
+- the `$60,000.00` checkout tied to `Bignay=1&error=True`,
+- the repeated all-products cart pattern,
 - the July 3 app-version transition,
 - and the skewed checkout amount distribution.
